@@ -8,6 +8,11 @@ Skripta za pretvorbo Trading212 CSV datotek v eDavki XML pripomore k hitrejšemu
 Ta skripta je zgolj pripomoček, ki poenostavi generiranje XML datoteke za oddajo davčne napovedi. Pred oddajo XML datoteke **obvezno ročno preveri** vse vnose. Z uporabo skripte sprejemaš popolno odgovornost za morebitne napake, izgube ali škodo, ki bi nastale zaradi nepravilno generiranih podatkov. Avtor skripte ne sprejema odgovornosti za kakršnekoli posledice.
 
 ## Posodobitve
+- **18.02.2026:**
+  - Izboljšana podpora za več različnih Trading212 CSV headerjev.
+  - Implementiran FIFO obračun čez celotno zgodovino, z izpisom samo prodaj za izbrano TAX_YEAR.
+  - Dodana podpora za ročni vnos stock splitov (SPLITS) z avtomatsko prilagoditvijo FIFO zaloge.
+  - Ločene uporabniške nastavitve (user_settings_example.py + lokalni user_settings.py).
 - **04.02.2026:**  
   - Preračun USD transakcij v EUR po tečaju [ECB Europa](https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml) na dan transakcije namesto T212 exchange rate. (credits: [Vid Pleterski](https://github.com/vidp1))
   - *Opomba:* Uradni tečaji so trenutno uporabljeni samo za USD. Za druge valute se še vedno uporablja T212 exchange rate.
