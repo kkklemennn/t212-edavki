@@ -160,7 +160,7 @@ Privzeto je ta opcija **izklopljena**.
 
 Če ti je skripta prihranila čas in trud, mi lahko častiš pivo.
 
-[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=HP6Z34ASADB4Y)
+[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/donate/?hosted_button_id=4AVZZEVPA7Q58)
 
 ## Prišlo do težav?
 
