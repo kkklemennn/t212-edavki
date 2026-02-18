@@ -77,25 +77,6 @@ Trading212 lahko izvozi količine z **več kot 8 decimalkami**, eDavki pa dovolj
 
 To **ni dejanska negativna zaloga**, ampak posledica zaokroževanja.
 
-### Opcija --fix-rounding-error
-
-Če skripto zaženeš z:
-```
-python main.py --fix-rounding-error
-```
-
-skripta:
-- zazna to razliko po posameznem tickerju
-- popravi eno samo transakcijo za najmanjši možni korak (0.00000001)
-- vedno izpiše, kaj je bilo popravljeno
-
-Primer izpisa:
-```
-[rounding-fix] AAPL: applied -0.00000001 via Market sell on 2024-06-12
-```
-
-Privzeto je ta opcija **izklopljena**.
-
 ## Podprte funkcionalnosti
 
 - **Podprte transakcije**  
@@ -106,7 +87,7 @@ Privzeto je ta opcija **izklopljena**.
   - stop sell
 - **Pretvorba valut**  
   - EUR → EUR
-  - USD → EUR (tečajnica iz [ECB Europa](https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml))
+  - Vse podprte tuje valute (USD, CHF, GBP, JPY, …) → EUR po dnevnem tečaju Banke Slovenije ([BSI API](https://api.bsi.si/exchange/daily)) na dan transakcije:
 - **Ignoriranje**  
   - tickerjev brez prodaje
   - dividend, obresti in drugih vrst transakcij
@@ -138,10 +119,6 @@ Privzeto je ta opcija **izklopljena**.
 
      ```
      python main.py
-     ```
-     Z vključenim popravkom za zaokroževanje:
-     ```
-     python main.py --fix-rounding-error
      ```
 
 6. **Rezultat** 
