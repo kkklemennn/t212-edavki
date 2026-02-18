@@ -13,6 +13,7 @@ Ta skripta je zgolj pripomoček, ki poenostavi generiranje XML datoteke za oddaj
   - Implementiran FIFO obračun čez celotno zgodovino, z izpisom samo prodaj za izbrano TAX_YEAR.
   - Dodana podpora za ročni vnos stock splitov (SPLITS) z avtomatsko prilagoditvijo FIFO zaloge.
   - Ločene uporabniške nastavitve (user_settings_example.py + lokalni user_settings.py).
+  - Pretvorba valut sedaj uporablja dnevni tečaj Banke Slovenije (BSI API) za vse podprte valute, namesto lokalne CSV tečajnice.
 - **04.02.2026:**  
   - Preračun USD transakcij v EUR po tečaju [ECB Europa](https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml) na dan transakcije namesto T212 exchange rate. (credits: [Vid Pleterski](https://github.com/vidp1))
   - *Opomba:* Uradni tečaji so trenutno uporabljeni samo za USD. Za druge valute se še vedno uporablja T212 exchange rate.
@@ -46,11 +47,8 @@ Ta skripta je zgolj pripomoček, ki poenostavi generiranje XML datoteke za oddaj
 
 1. **Uvoz CSV datotek**  
    Skripta prebere vse CSV datoteke iz mape `input`.
-   
-2. **Prepoznava osnovne valute**  
-   Iz glave CSV datoteke se zazna, ali je “base currency” **EUR** ali **USD**.
 
-3. **Filtriranje transakcij**  
+2. **Filtriranje transakcij**  
    Upoštevajo se samo naslednje vrste:
    - **market buy**
    - **market sell**
@@ -60,11 +58,11 @@ Ta skripta je zgolj pripomoček, ki poenostavi generiranje XML datoteke za oddaj
    
    Ostale vrstice (dividende, obresti ipd.) se ignorirajo.
 
-4. **Pretvorba cen v EUR**  
-   - Če je osnovna valuta **EUR**, se cena uporabi neposredno.
-   - Če je osnovna valuta **USD**, se uporabi dnevni tečaj iz mape `rate` (tečajnica iz [ECB Europa](https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml)).
+3. **Pretvorba cen v EUR**  
+   - Če je osnovna valuta EUR, se cena uporabi neposredno.
+   - Če je valuta drugačna (npr. USD, CHF, GBP …), se uporabi dnevni tečaj Banke Slovenije (BSI API) na dan transakcije.
    
-5. **Generiranje XML**  
+4. **Generiranje XML**  
    - Za vsak ticker, ki ima vsaj eno prodajo, se ustvari KDVPItem.
    - XML je pripravljen za uvoz v eDavki → Doh-KDVP → Uvoz popisnih listov.
 
