@@ -7,6 +7,9 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from xml.etree.ElementTree import Element, SubElement, tostring
 from xml.dom import minidom
 from collections import deque
+import json
+import urllib.request
+
 
 # =========================
 # IMPORT USER SETTINGS AND STOCK SPLITS
@@ -111,6 +114,80 @@ def parse_date(time_value: str) -> str:
 def in_tax_year(date_yyyy_mm_dd: str) -> bool:
     return date_yyyy_mm_dd.startswith(TAX_YEAR + "-")
 
+
+# =========================
+# FX RATES FROM BSI
+# =========================
+BSI_DAILY_URL = "https://api.bsi.si/exchange/daily?date={date}"
+
+
+def _fetch_bsi_daily_rates(date: str) -> dict[str, Decimal]:
+    """
+    Fetch daily reference rates from BSI API for a given date.
+    Returns dict like {"USD": Decimal("1.0447"), ...} and includes "EUR": 1.
+    """
+    url = BSI_DAILY_URL.format(date=date)
+    req = urllib.request.Request(url, headers={"User-Agent": "t212-edavki/1.0"})
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        payload = json.loads(resp.read().decode("utf-8"))
+
+    if not payload.get("success"):
+        raise ValueError(f"BSI API returned success=false for {date}: {payload.get('error') or payload.get('message')}")
+
+    data = payload.get("data") or []
+    rates = {item["code"]: to_decimal(item["value"]) for item in data if "code" in item and "value" in item}
+    rates["EUR"] = Decimal("1")
+    return rates
+
+
+def _prev_day(date: str) -> str:
+    d = datetime.datetime.strptime(date, "%Y-%m-%d").date()
+    d2 = d - datetime.timedelta(days=1)
+    return d2.strftime("%Y-%m-%d")
+
+
+def get_bsi_rate(ccy: str, date: str, state: dict) -> Decimal:
+    """
+    Get BSI reference rate for ccy on date.
+    If date has no data (weekend/holiday), walks backwards until it finds a day that has the ccy.
+    Cached in-memory in state["bsi_cache"].
+    """
+    ccy = (ccy or "").upper()
+    if ccy == "EUR":
+        return Decimal("1")
+
+    cache: dict[str, dict[str, Decimal]] = state.setdefault("bsi_cache", {})
+
+    probe = date
+    while True:
+        if probe not in cache:
+            try:
+                cache[probe] = _fetch_bsi_daily_rates(probe)
+            except Exception:
+                # No data for that day (or temporary error) -> try previous day
+                probe = _prev_day(probe)
+                continue
+
+        day_rates = cache[probe]
+        if ccy in day_rates:
+            return day_rates[ccy]
+
+        # Currency missing on that day -> try previous day
+        probe = _prev_day(probe)
+
+
+def convert_ccy_to_eur(amount: Decimal, ccy: str, date: str, state: dict) -> Decimal:
+    """
+    Convert amount in currency ccy into EUR using BSI daily rate for date (fallback backwards).
+    Assumption: BSI value = CCY per 1 EUR => EUR = CCY / value.
+    """
+    ccy = (ccy or "").upper()
+    if ccy == "EUR":
+        return amount
+    rate = get_bsi_rate(ccy, date, state)
+    if rate == 0:
+        raise ValueError(f"BSI rate is 0 for {ccy} on/near {date}")
+    return amount / rate
 
 # =========================
 # CSV NORMALIZATION (MULTI-YEAR HEADERS)
@@ -253,26 +330,9 @@ def convert_usd_to_eur(price_usd: Decimal, date: str, usd_eur: dict) -> Decimal:
 
 def compute_eur_unit_price(row: dict, state: dict) -> Decimal:
     date = parse_date(row["time"])
-    price = row["price"]
-    currency = row["price_ccy"]
-    rate = row["fx_rate"]
-    base_currency = row["base_ccy"]
-    usd_eur = state["usd_eur"]
-
-    if currency == "EUR":
-        return to_decimal(price)
-
-    if base_currency == "EUR" and currency == "USD":
-        return convert_usd_to_eur(to_decimal(price), date, usd_eur)
-
-    if base_currency == "EUR":
-        return convert_to_base(price, rate)
-
-    if base_currency == "USD":
-        usd = convert_to_base(price, rate)
-        return convert_usd_to_eur(usd, date, usd_eur)
-
-    raise ValueError(f"Unsupported base currency: {base_currency}")
+    price = to_decimal(row["price"])
+    currency = (row["price_ccy"] or "EUR").upper()
+    return convert_ccy_to_eur(price, currency, date, state)
 
 
 # =========================
@@ -484,13 +544,14 @@ def main():
     _args = parse_args()
 
     state = {
-        "usd_eur": {},
-        "rows": [],
+    "rows": [],
+    "bsi_cache": {},
     }
 
+    print("Loading CSV files, please wait...")
     load_input_files(INPUT_FOLDER, state)
-    load_usd_eur_rates(RATE_FOLDER, state)
 
+    print("Detecting base currencies, please wait...")
     base_set = sorted({r.get("base_ccy", "EUR") for r in state["rows"]})
     print("Base currencies found:", ", ".join(base_set) if base_set else "EUR")
 
