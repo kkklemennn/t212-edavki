@@ -137,14 +137,7 @@ To **ni dejanska negativna zaloga**, ampak posledica zaokroževanja.
 
 [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/donate/?hosted_button_id=4AVZZEVPA7Q58)
 
-## Prišlo do težav?
-
-Če skripta ne deluje:
-- odpri **New issue** na GitHubu
-- priloži izpis napake in opis problema
-
-Na e-pošto ne odgovarjam, zato prosim, da težave prijaviš preko GitHub issue sistema.
-
-
-
-
+# TODO:
+- Separate profit and loss
+- Cache ccy FX rate
+- Code review and cleanup
