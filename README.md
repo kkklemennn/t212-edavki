@@ -140,3 +140,4 @@ To **ni dejanska negativna zaloga**, ampak posledica zaokroževanja.
 # TODO:
 - Separate profit and loss
 - Code review and cleanup
+- Wash-sale detection (BYND example) - 3. odstavek 90. člena Zdoh-1

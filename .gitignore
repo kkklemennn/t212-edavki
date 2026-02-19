@@ -18,4 +18,4 @@ __pycache__/
 Thumbs.db
 
 # Cached BSI rates
-rate/bsi_rates_cache.json
+rate/bsi_cache.json
