@@ -139,5 +139,4 @@ To **ni dejanska negativna zaloga**, ampak posledica zaokroževanja.
 
 # TODO:
 - Separate profit and loss
-- Cache ccy FX rate
 - Code review and cleanup

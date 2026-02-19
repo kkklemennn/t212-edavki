@@ -16,3 +16,6 @@ __pycache__/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Cached BSI rates
+rate/bsi_rates_cache.json

@@ -28,6 +28,9 @@ RATE_FOLDER = "rate"
 OUTPUT_FOLDER = "output"
 OUTPUT_FILENAME = "output.xml"
 
+# Disk cache for BSI rates (stored as JSON)
+BSI_CACHE_FILE = os.path.join(RATE_FOLDER, "bsi_cache.json")
+
 # Supported actions (Trading 212 export)
 SUPPORTED_ACTIONS = {"Market sell", "Market buy", "Limit sell", "Limit buy", "Stop sell"}
 
@@ -114,10 +117,55 @@ def parse_date(time_value: str) -> str:
 def in_tax_year(date_yyyy_mm_dd: str) -> bool:
     return date_yyyy_mm_dd.startswith(TAX_YEAR + "-")
 
+
 def new_row(securities_elem, row_id: int):
     row = SubElement(securities_elem, "Row")
     SubElement(row, "ID").text = str(row_id)
     return row
+
+
+# =========================
+# DISK CACHE FOR BSI RATES
+# =========================
+def load_bsi_cache(path: str) -> dict[str, dict[str, Decimal]]:
+    """
+    Load cache from JSON:
+      { "YYYY-MM-DD": { "USD": "1.2345", "GBP": "0.8765", "EUR": "1" }, ... }
+    into:
+      { "YYYY-MM-DD": { "USD": Decimal(...), ... }, ... }
+    """
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        cache: dict[str, dict[str, Decimal]] = {}
+        for day, rates in (raw or {}).items():
+            if not isinstance(rates, dict):
+                continue
+            cache[day] = {ccy: to_decimal(val) for ccy, val in rates.items()}
+        return cache
+    except Exception as e:
+        print(f"Warning: failed to load BSI cache '{path}': {e}")
+        return {}
+
+
+def save_bsi_cache(cache: dict[str, dict[str, Decimal]], path: str) -> None:
+    """
+    Save cache to JSON (atomic write). Decimals are stored as strings.
+    """
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+
+    serializable: dict[str, dict[str, str]] = {}
+    for day, rates in (cache or {}).items():
+        if not isinstance(rates, dict):
+            continue
+        serializable[day] = {ccy: str(val) for ccy, val in rates.items()}
+
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(serializable, f, ensure_ascii=False, indent=2, sort_keys=True)
+    os.replace(tmp_path, path)
 
 
 # =========================
@@ -137,7 +185,9 @@ def _fetch_bsi_daily_rates(date: str) -> dict[str, Decimal]:
         payload = json.loads(resp.read().decode("utf-8"))
 
     if not payload.get("success"):
-        raise ValueError(f"BSI API returned success=false for {date}: {payload.get('error') or payload.get('message')}")
+        raise ValueError(
+            f"BSI API returned success=false for {date}: {payload.get('error') or payload.get('message')}"
+        )
 
     data = payload.get("data") or []
     rates = {item["code"]: to_decimal(item["value"]) for item in data if "code" in item and "value" in item}
@@ -155,7 +205,7 @@ def get_bsi_rate(ccy: str, date: str, state: dict) -> Decimal:
     """
     Get BSI reference rate for ccy on date.
     If date has no data (weekend/holiday), walks backwards until it finds a day that has the ccy.
-    Cached in-memory in state["bsi_cache"].
+    Cached in-memory in state["bsi_cache"] and persisted to disk.
     """
     ccy = (ccy or "").upper()
     if ccy == "EUR":
@@ -193,6 +243,7 @@ def convert_ccy_to_eur(amount: Decimal, ccy: str, date: str, state: dict) -> Dec
     if rate == 0:
         raise ValueError(f"BSI rate is 0 for {ccy} on/near {date}")
     return amount / rate
+
 
 # =========================
 # CSV NORMALIZATION (MULTI-YEAR HEADERS)
@@ -291,7 +342,7 @@ def load_input_files(input_folder: str, state: dict) -> None:
 
 
 # =========================
-# FX RATES
+# FX RATES (LEGACY USD/EUR FILES) - kept for compatibility, not used now
 # =========================
 def read_rate_file(filename: str, rate_folder: str, usd_eur: dict) -> None:
     path = os.path.join(rate_folder, filename)
@@ -304,7 +355,7 @@ def read_rate_file(filename: str, rate_folder: str, usd_eur: dict) -> None:
 
 
 def load_usd_eur_rates(rate_folder: str, state: dict) -> None:
-    usd_eur = state["usd_eur"]
+    usd_eur = state.setdefault("usd_eur", {})
     rate_files = [f for f in get_files(rate_folder) if f.lower().endswith(".csv")]
     if not rate_files:
         raise FileNotFoundError(f"No exchange rate CSV files found in {rate_folder} folder.")
@@ -545,7 +596,9 @@ def process_transactions(state: dict):
 # CLI
 # =========================
 def parse_args():
-    parser = argparse.ArgumentParser(description="Convert Trading212 CSV exports into eDavki Doh_KDVP XML (FIFO by year).")
+    parser = argparse.ArgumentParser(
+        description="Convert Trading212 CSV exports into eDavki Doh_KDVP XML (FIFO by year)."
+    )
     return parser.parse_args()
 
 
@@ -553,24 +606,31 @@ def main():
     _args = parse_args()
 
     state = {
-    "rows": [],
-    "bsi_cache": {},
+        "rows": [],
+        "bsi_cache": load_bsi_cache(BSI_CACHE_FILE),
     }
+    print(f"Loaded BSI cache days: {len(state['bsi_cache'])} ({BSI_CACHE_FILE})")
 
-    print("Loading CSV files, please wait...")
-    load_input_files(INPUT_FOLDER, state)
+    try:
+        print("Loading CSV files, please wait...")
+        load_input_files(INPUT_FOLDER, state)
 
-    print("Detecting base currencies, please wait...")
-    base_set = sorted({r.get("base_ccy", "EUR") for r in state["rows"]})
-    print("Base currencies found:", ", ".join(base_set) if base_set else "EUR")
+        print("Detecting base currencies, please wait...")
+        base_set = sorted({r.get("base_ccy", "EUR") for r in state["rows"]})
+        print("Base currencies found:", ", ".join(base_set) if base_set else "EUR")
 
-    envelope, purchase_count, sale_count = process_transactions(state)
-    xml_output = prettify(envelope)
-    output_path = save_file(xml_output, OUTPUT_FOLDER, OUTPUT_FILENAME)
+        envelope, purchase_count, sale_count = process_transactions(state)
+        xml_output = prettify(envelope)
+        output_path = save_file(xml_output, OUTPUT_FOLDER, OUTPUT_FILENAME)
 
-    print("Purchases matched (FIFO) in output:", purchase_count)
-    print("Sales in tax year in output:", sale_count)
-    print("XML saved to:", output_path)
+        print("Purchases matched (FIFO) in output:", purchase_count)
+        print("Sales in tax year in output:", sale_count)
+        print("XML saved to:", output_path)
+
+    finally:
+        # Persist whatever we managed to fetch/cache so far
+        save_bsi_cache(state.get("bsi_cache", {}), BSI_CACHE_FILE)
+        print(f"Saved BSI cache days: {len(state.get('bsi_cache', {}))} ({BSI_CACHE_FILE})")
 
 
 if __name__ == "__main__":
@@ -578,4 +638,3 @@ if __name__ == "__main__":
         main()
     except Exception as err:
         print("Error:", err)
-        
