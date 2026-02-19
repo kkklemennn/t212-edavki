@@ -114,6 +114,11 @@ def parse_date(time_value: str) -> str:
 def in_tax_year(date_yyyy_mm_dd: str) -> bool:
     return date_yyyy_mm_dd.startswith(TAX_YEAR + "-")
 
+def new_row(securities_elem, row_id: int):
+    row = SubElement(securities_elem, "Row")
+    SubElement(row, "ID").text = str(row_id)
+    return row
+
 
 # =========================
 # FX RATES FROM BSI
@@ -470,10 +475,7 @@ def KVDP_item(root, ticker: str):
     securities = SubElement(item_elem, "Securities")
     SubElement(securities, "Code").text = ticker
     SubElement(securities, "IsFond").text = "false"
-
-    row_elem = SubElement(securities, "Row")
-    SubElement(row_elem, "ID").text = "0"
-    return row_elem
+    return securities
 
 
 def sale(root, date: str, quantity, price) -> None:
@@ -517,17 +519,24 @@ def process_transactions(state: dict):
     sale_count = 0
 
     for ticker in tickers:
-        row_elem = KVDP_item(doh, ticker)
+        securities = KVDP_item(doh, ticker)
+        row_id = 0
 
+        # Purchases first (or keep chronological if you want)
         for p in fifo_out[ticker]["purchases"]:
-            purchase(row_elem, p["date"], p["qty"], p["price_eur"])
+            row = new_row(securities, row_id)
+            purchase(row, p["date"], p["qty"], p["price_eur"])
+            SubElement(row, "F8").text = fmt_decimal("0", "typeDecimalNeg12_8")
+            row_id += 1
             purchase_count += 1
 
+        # Sales
         for s in fifo_out[ticker]["sales"]:
-            sale(row_elem, s["date"], s["qty"], s["price_eur"])
+            row = new_row(securities, row_id)
+            sale(row, s["date"], s["qty"], s["price_eur"])
+            SubElement(row, "F8").text = fmt_decimal("0", "typeDecimalNeg12_8")
+            row_id += 1
             sale_count += 1
-
-        SubElement(row_elem, "F8").text = fmt_decimal("0", "typeDecimalNeg12_8")
 
     return envelope, purchase_count, sale_count
 
