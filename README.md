@@ -8,6 +8,8 @@ Skripta za pretvorbo Trading212 CSV datotek v eDavki XML pripomore k hitrejšemu
 Ta skripta je zgolj pripomoček, ki poenostavi generiranje XML datoteke za oddajo davčne napovedi. Pred oddajo XML datoteke **obvezno ročno preveri** vse vnose. Z uporabo skripte sprejemaš popolno odgovornost za morebitne napake, izgube ali škodo, ki bi nastale zaradi nepravilno generiranih podatkov. Avtor skripte ne sprejema odgovornosti za kakršnekoli posledice.
 
 ## Posodobitve
+- ***23.02.2026**
+  - Dodana zaznava “wash-sale” situacij po 5. odstavku 97. člena ZDoh-2 (pravilo ±30 dni pri ponovnem nakupu istovrstnega kapitala) – skripta izpiše opozorila v konzolo, izhodni XML ostane nespremenjen.
 - **19.02.2026**
   - Optimizacija in izboljšave delovanja skripte s cachingom pretvorbe valut
 - **18.02.2026:**
@@ -82,4 +84,4 @@ Ta skripta je zgolj pripomoček, ki poenostavi generiranje XML datoteke za oddaj
 
 # TODO:
 - Code review and cleanup
-- Wash-sale detection (BYND example) - 3. odstavek 90. člena Zdoh-1
+- CLI print organize and cleanup

@@ -124,6 +124,10 @@ def new_row(securities_elem, row_id: int):
     return row
 
 
+def _parse_yyyy_mm_dd(d: str) -> datetime.date:
+    return datetime.datetime.strptime(d, "%Y-%m-%d").date()
+
+
 # =========================
 # DISK CACHE FOR BSI RATES
 # =========================
@@ -415,6 +419,120 @@ def apply_splits_if_needed(ticker: str, current_date: str, fifo_queue, applied_s
 
 
 # =========================
+# WASH-SALE DETECTION (ZDoh-2 "±30 days repurchase" rule) - CONSOLE ONLY
+# =========================
+def detect_wash_sales(state: dict, window_days: int = 30) -> None:
+    """
+    97. člen, 5. odstavek ZDoh-2
+    Detect potential wash-sale situations under the Slovenian "±30 days repurchase" rule:
+      - a SELL at a loss
+      - plus an acquisition of the same security within +/- window_days (default 30)
+
+    Notes:
+      - This is detection only: it prints warnings, does NOT change FIFO, XML, or numbers.
+      - We approximate "same security" as same ticker from the CSV.
+      - For loss determination we use FIFO cost basis for the sold lots.
+    """
+    rows_by_ticker: dict[str, list[dict]] = {}
+    for r in state.get("rows", []):
+        if r.get("action") not in SUPPORTED_ACTIONS:
+            continue
+        t = (r.get("ticker") or "").strip()
+        if not t:
+            continue
+        rows_by_ticker.setdefault(t, []).append(r)
+
+    if not rows_by_ticker:
+        return
+
+    any_warn = False
+
+    for ticker, txs in rows_by_ticker.items():
+        txs = sorted(txs, key=lambda x: x.get("time", ""))
+
+        # Keep list of buy dates (for quick window checks)
+        buy_dates: list[str] = []
+        for tx in txs:
+            if tx["action"].split()[1].lower() == "buy":
+                buy_dates.append(parse_date(tx["time"]))
+
+        fifo = deque()
+        applied_splits = set()
+
+        for tx in txs:
+            action = tx["action"].split()[1].lower()
+            date_str = parse_date(tx["time"])
+            date_dt = _parse_yyyy_mm_dd(date_str)
+
+            apply_splits_if_needed(ticker, date_str, fifo, applied_splits)
+
+            qty = to_decimal(tx["shares"])
+            unit_eur = compute_eur_unit_price(tx, state)
+
+            if action == "buy":
+                fifo.append({"date": date_str, "qty": qty, "price_eur": unit_eur})
+                continue
+
+            if action != "sell":
+                continue
+
+            # Compute cost basis of the sold quantity based on FIFO lots
+            remaining = qty
+            cost_total = Decimal("0")
+            qty_total = qty
+
+            # Separate pass: mutating FIFO here does not affect the main exporter
+            while remaining > 0:
+                if not fifo:
+                    break
+
+                lot = fifo[0]
+                take = lot["qty"] if lot["qty"] <= remaining else remaining
+                cost_total += take * lot["price_eur"]
+                lot["qty"] -= take
+                remaining -= take
+
+                if lot["qty"] <= 0:
+                    fifo.popleft()
+
+            if remaining > 0:
+                continue
+
+            proceeds_total = qty_total * unit_eur
+            pnl = proceeds_total - cost_total
+
+            if pnl >= 0:
+                continue  # only loss sells matter
+
+            # Check for any BUY of same ticker within +/- window_days
+            start = date_dt - datetime.timedelta(days=window_days)
+            end = date_dt + datetime.timedelta(days=window_days)
+
+            has_repurchase = False
+            for bd in buy_dates:
+                bd_dt = _parse_yyyy_mm_dd(bd)
+                if start <= bd_dt <= end:
+                    has_repurchase = True
+                    break
+
+            if has_repurchase:
+                any_warn = True
+                pnl_abs = -pnl
+                print(
+                    f"[WASH-SALE WARNING (±{window_days} days repurchase rule)] {ticker}: "
+                    f"loss sale on {date_str} (qty={qty_total}, "
+                    f"approx loss EUR={pnl_abs.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)}) "
+                    f"and (re)purchase within ±{window_days} days -> loss may NOT reduce tax base."
+                )
+
+    if any_warn:
+        print(
+            "Note: This check covers only your own BUY/SELL transactions for the same ticker "
+            f"within ±{window_days} days."
+        )
+
+
+# =========================
 # FIFO MATCHING (ACROSS HISTORY, OUTPUT ONLY TAX_YEAR SELLS + USED BUYS)
 # =========================
 def fifo_match_for_year(state: dict) -> dict[str, dict]:
@@ -614,6 +732,9 @@ def main():
     try:
         print("Loading CSV files, please wait...")
         load_input_files(INPUT_FOLDER, state)
+
+        # --- Wash-sale detection (console only, does not change output) ---
+        detect_wash_sales(state, window_days=30)
 
         print("Detecting base currencies, please wait...")
         base_set = sorted({r.get("base_ccy", "EUR") for r in state["rows"]})
