@@ -727,14 +727,13 @@ def main():
         "rows": [],
         "bsi_cache": load_bsi_cache(BSI_CACHE_FILE),
     }
-    print(f"Loaded BSI cache days: {len(state['bsi_cache'])} ({BSI_CACHE_FILE})")
+    initial_cache_days = len(state["bsi_cache"])
+    print(f"Loaded BSI cache days: {initial_cache_days} ({BSI_CACHE_FILE})")
 
     try:
         print("Loading CSV files, please wait...")
         load_input_files(INPUT_FOLDER, state)
 
-        # --- Wash-sale detection (console only, does not change output) ---
-        detect_wash_sales(state, window_days=30)
 
         print("Detecting base currencies, please wait...")
         base_set = sorted({r.get("base_ccy", "EUR") for r in state["rows"]})
@@ -748,10 +747,20 @@ def main():
         print("Sales in tax year in output:", sale_count)
         print("XML saved to:", output_path)
 
+        # Wash-sale detection
+        print("\nChecking wash-sale situations (ZDoh-2 97/5)...")
+        detect_wash_sales(state, window_days=30)
+        
     finally:
         # Persist whatever we managed to fetch/cache so far
-        save_bsi_cache(state.get("bsi_cache", {}), BSI_CACHE_FILE)
-        print(f"Saved BSI cache days: {len(state.get('bsi_cache', {}))} ({BSI_CACHE_FILE})")
+        final_cache_days = len(state.get("bsi_cache", {}))
+        new_days = final_cache_days - initial_cache_days
+
+        if new_days > 0:
+            save_bsi_cache(state.get("bsi_cache", {}), BSI_CACHE_FILE)
+            print(f"\nSaved BSI cache: +{new_days} new day(s) (total {final_cache_days}) ({BSI_CACHE_FILE})")
+        else:
+            print(f"\nBSI cache unchanged: +0 new day(s) (total {final_cache_days}) ({BSI_CACHE_FILE})")
 
 
 if __name__ == "__main__":
