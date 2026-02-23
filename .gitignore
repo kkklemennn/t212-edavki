@@ -19,6 +19,7 @@ Thumbs.db
 
 # Cached BSI rates
 rate/*
+!rate/.gitkeep
 
 # Dividends - work in progress
 dividends/*
