@@ -18,4 +18,7 @@ __pycache__/
 Thumbs.db
 
 # Cached BSI rates
-rate/bsi_cache.json
+rate/*
+
+# Dividends - work in progress
+dividends/*

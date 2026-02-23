@@ -8,40 +8,16 @@ Skripta za pretvorbo Trading212 CSV datotek v eDavki XML pripomore k hitrejšemu
 Ta skripta je zgolj pripomoček, ki poenostavi generiranje XML datoteke za oddajo davčne napovedi. Pred oddajo XML datoteke **obvezno ročno preveri** vse vnose. Z uporabo skripte sprejemaš popolno odgovornost za morebitne napake, izgube ali škodo, ki bi nastale zaradi nepravilno generiranih podatkov. Avtor skripte ne sprejema odgovornosti za kakršnekoli posledice.
 
 ## Posodobitve
+- **19.02.2026**
+  - Optimizacija in izboljšave delovanja skripte s cachingom pretvorbe valut
 - **18.02.2026:**
   - Izboljšana podpora za več različnih Trading212 CSV headerjev.
   - Implementiran FIFO obračun čez celotno zgodovino, z izpisom samo prodaj za izbrano TAX_YEAR.
   - Dodana podpora za ročni vnos stock splitov (SPLITS) z avtomatsko prilagoditvijo FIFO zaloge.
   - Ločene uporabniške nastavitve (user_settings_example.py + lokalni user_settings.py).
   - Pretvorba valut sedaj uporablja dnevni tečaj Banke Slovenije (BSI API) za vse podprte valute, namesto lokalne CSV tečajnice.
-- **04.02.2026:**  
-  - Preračun USD transakcij v EUR po tečaju [ECB Europa](https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml) na dan transakcije namesto T212 exchange rate. (credits: [Vid Pleterski](https://github.com/vidp1))
-  - *Opomba:* Uradni tečaji so trenutno uporabljeni samo za USD. Za druge valute se še vedno uporablja T212 exchange rate.
-- **11.01.2026:**  
-  - Dodana podpora za **Stop sell**.
-  - Dodana opcija `--fix-rounding-error`
-  - Popravljeno formatiranje decimal (skladno z eDavki – max. 8 decimalk)
-- **10.01.2026:**  
-  - Posodobljena tečajnica USD/EUR 1999-2025.
-- **28.02.2025:**
-  - Dodana validacija za starejše CSV headerje. (credits: [trideetztz](https://github.com/trideetztz))
-- **15.01.2025:**  
-  - Dinamična validacija headerja.
-  - Popravek XML strukture.
-- **11.01.2025:**  
-  - Popravek za nov header.
-- **06.01.2025:**  
-  - Posodobljena tečajnica USD/EUR 1999-2024.
-- **13.10.2023:**  
-  - Popravek za nov header.
-- **10.02.2023:**  
-  - Popravek za nov header.
-  - Uporabljena tečajnica [ECB Europa](https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.xml) namesto [Yahoo Finance](https://finance.yahoo.com/quote/EUR%3DX/history?p=EUR%3DX).
-- **17.02.2023:**  
-  - Ignoriranje tickerjev brez odsvojitve (prodaje: market sell in limit sell).
-- **26.02.2023:**  
-  - Popravek za nov format.
-  - Dodani informativni izpisi.
+- **18.02.2026:**
+  - Forkano iz [t212-davki](https://github.com/Neophytez/t212-edavki)
 
 ## Kako deluje skripta?
 
@@ -60,39 +36,11 @@ Ta skripta je zgolj pripomoček, ki poenostavi generiranje XML datoteke za oddaj
 
 3. **Pretvorba cen v EUR**  
    - Če je osnovna valuta EUR, se cena uporabi neposredno.
-   - Če je valuta drugačna (npr. USD, CHF, GBP …), se uporabi dnevni tečaj Banke Slovenije (BSI API) na dan transakcije.
+   - Če je valuta drugačna (npr. USD, CHF, GBP …), se uporabi dnevni tečaj Banke Slovenije ([BSI API](https://api.bsi.si/exchange/daily)) na dan transakcije.
    
 4. **Generiranje XML**  
    - Za vsak ticker, ki ima vsaj eno prodajo, se ustvari KDVPItem.
    - XML je pripravljen za uvoz v eDavki → Doh-KDVP → Uvoz popisnih listov.
-
-## Decimalke in zaokroževanje (pomembno)
-
-Trading212 lahko izvozi količine z **več kot 8 decimalkami**, eDavki pa dovoljuje **največ 8**.
-
-Če se vsaka transakcija zaokroži ločeno, lahko eDavki po seštevku pokaže zelo majhen presežek, npr.:
-```
--0.00000001
-```
-
-To **ni dejanska negativna zaloga**, ampak posledica zaokroževanja.
-
-## Podprte funkcionalnosti
-
-- **Podprte transakcije**  
-  - market sell
-  - market buy
-  - limit sell
-  - limit buy
-  - stop sell
-- **Pretvorba valut**  
-  - EUR → EUR
-  - Vse podprte tuje valute (USD, CHF, GBP, JPY, …) → EUR po dnevnem tečaju Banke Slovenije ([BSI API](https://api.bsi.si/exchange/daily)) na dan transakcije:
-- **Ignoriranje**  
-  - tickerjev brez prodaje
-  - dividend, obresti in drugih vrst transakcij
-- **XML**  
-  - format skladen z **Doh-KDVP** (8 decimalk, brez znanstvenega zapisa)
 
 ## Navodila za uporabo
 
@@ -109,14 +57,10 @@ To **ni dejanska negativna zaloga**, ampak posledica zaokroževanja.
    - Kopiraj CSV datoteke v mapo `t212-edavki-main/input` (skripta podpira več CSV datotek hkrati)
 
 4. **Uredi osebne podatke**
-   - Odpri `main.py`
-   - Na vrhu skripte izpolni razdelek **USER SETTINGS**
+   - Odpri `user_settings_example.py`
+   - Vpiši svoje podatke in preimenuj v `user_settings.py`
 
 5. **Zaženi skripto**  
-   - Odpri mapo `t212-edavki-main`
-   - Pritisni kombinacijo tipk **ALT + F** (odpre se meni), nato **S** (odpre se podmeni) in nato **R** (odpre se PowerShell).
-   - Osnovni zagon:
-
      ```
      python main.py
      ```
@@ -129,7 +73,6 @@ To **ni dejanska negativna zaloga**, ampak posledica zaokroževanja.
   si uspešno ustvaril XML datoteko, pripravljeno na uvoz v eDavki.
 - XML datoteka se ustvari v mapi `output`
 - Datoteko uvoziš v eDavki (Doh-KDVP)
-- Če se pojavi kakšna napaka, preveri sporočila v terminalu.
 
 ## Podpri delo
 
@@ -138,6 +81,5 @@ To **ni dejanska negativna zaloga**, ampak posledica zaokroževanja.
 [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/donate/?hosted_button_id=4AVZZEVPA7Q58)
 
 # TODO:
-- Separate profit and loss
 - Code review and cleanup
 - Wash-sale detection (BYND example) - 3. odstavek 90. člena Zdoh-1
